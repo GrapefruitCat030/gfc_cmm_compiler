@@ -1,0 +1,103 @@
+make_T: make a T node, standing for the basic or struct type.
+        TWO KINDS:   1.Tnode(basic) 2.Tnode(struct)+S(struct) 
+
+make_F: make a single F node.   (has NO tail. only the null/arr/func/ Type node.)
+        THREE KINDS: 1.F(null) 2.F(arr) 3.F(struct)
+                    4.F(func):F + nullFIELD + SL 
+
+make_S: link the F and T so that complete a symbol.
+        ONE KINDS:   1.F+T (Tips: for F in FL: F+T,delete F.ptr) 2.F(struct)+SL
+                    3.stuff_F(T, F(func))
+
+make_FL: make a F list, commonly used in Dec list (No tail).
+        TWO KINDS:   1. F+FL 2. FL+FL
+
+make_SL: make a S list, commonly used in param list or struct elems. 
+        THREE KINDS: 1. S+SL 2. FL+T 3.SL+SL
+
+stuff_F: stuff the nullFIELD.
+
+
+>> High-level Definitions
+
+Program -> ExtDefList
+ExtDefList -> ExtDef ExtDefList
+            | null
+ExtDef -> Specifier ExtDecList SEMI     {ExtDef.s = make_S(Spec.s, ExtDecList.s)       ADD_SYM(ExtDef.s)}
+        | Specifier SEMI                {if Spec.s is a struct T node, then
+                                           ExtDef.s = Spec.s->S, ADD_SYM(ExtDef.s)
+                                        }
+        | Specifier FunDec CompSt       {ExtDef.s = stuff_F(Spec.s, FunDec.s)          ADD_SYM(ExtDef.s)}
+ExtDecList -> VarDec                    {ExtDecList.s = VarDec.s}
+            | VarDec COMMA ExtDecList   {ExtDecList.s = make_FL(VarDec.s, ExtDecList1.s)}
+
+
+>> Specifiers
+
+Specifier -> TYPE                                   {Spec.s = make_T(TYPE);}
+        | StructSpecifier                           {Spec.s = make_T(StructSpecifier.s)}
+StructSpecifier -> STRUCT OptTag LC DefList RC      {StructSpecifier.s = make_S(make_F(OptTag), DefList.s)}
+                | STRUCT Tag                        {StructSpecifier.s = check_S(Tag) return S(Tag)}
+OptTag -> ID
+        | null
+Tag -> ID
+
+
+>> Declarators
+VarDec -> ID                         {V.s = make_F(ID)         }
+        | VarDec LB INT RB           {V.s = make_F(V1.s, INT)}
+FunDec -> ID LP VarList RP           {FunDec.s = make_F(make_F(ID) + nullFIELD(res) + VarList.s) }
+        | ID LP RP                   {FunDec.s = make_F(make_F(ID) + nullFIELD(res)) }
+VarList -> ParamDec COMMA VarList    {VarList.s = make_SL(ParamDec.s, VarList1.s)}
+        | ParamDec                   {VarList.s = ParamDec.s}
+ParamDec -> Specifier VarDec         {P.s = make_S(Spec.s, V.s) }
+
+
+>> Statements
+
+CompSt ->                   {enter CompSt       }
+    LC DefList StmtList RC  {do something       }
+                            {exit CompSt        }
+StmtList -> Stmt StmtList
+        | null
+Stmt -> Exp SEMI
+    | CompSt
+    | RETURN Exp SEMI
+    | IF LP Exp RP Stmt
+    | IF LP Exp RP Stmt ELSE Stmt
+    | WHILE LP Exp RP Stmt
+
+
+>> Local Definitions
+// 将 DecList 组成一个 F list(通通没有 TYPE tail)
+DefList -> Def DefList          {DefList.s = make_SL(Def.s, DefList1.s)}
+        | null
+Def -> Specifier DecList SEMI   {Def.s = make_SL(DecList.s, Spec.s); ADD_SYM(Def.s)} // 注意在遍历添加符号后的 Field next 指针
+DecList -> Dec                  {DecList.s = Dec.s}
+        | Dec COMMA DecList     {DecList.s = make_FL(Dec.s, DecList1.s)}
+Dec -> VarDec                   {Dec.s = V.s }
+    | VarDec ASSIGNOP Exp       {            }
+   
+
+>>  Expressions
+
+Exp -> Exp ASSIGNOP Exp
+    | Exp AND Exp
+    | Exp OR Exp
+    | Exp RELOP Exp
+    | Exp PLUS Exp
+    | Exp MINUS Exp
+    | Exp STAR Exp
+    | Exp DIV Exp
+    | LP Exp RP
+    | MINUS Exp
+    | NOT Exp
+    | ID LP Args RP   // Func Call
+    | ID LP RP        // Func Call
+    | Exp LB Exp RB   // ARRAY ACCESS
+    | Exp DOT ID      // STRUCT ACCESS
+    | ID              
+    | INT
+    | FLOAT
+Args -> Exp COMMA Args
+    | Exp

@@ -1,0 +1,185 @@
+/*
+        @Author: GrapefruitCat030
+        @Date:          2023-11-3
+*/
+
+/* Type System */
+
+[F]:    A simple struct Field node, only value assigned is its id.
+[T]:    A struct Type node, has 6 kinds.
+        [T(B_INT)]
+        [T(B_FLOAT)]
+        [T(ARRAY)]
+        [T(FUNC)]
+        [T(STRUCTURE_DEF)]
+        [T(STRUCTURE_VAR)]
+
+T:      Type, standing for the basic or struct variable type.
+        TWO KINDS:      1.T_basic:      [T(B_INT)] or [T(B_FLOAT)]              --- make_T_basic(TYPE)
+                        2.T_struct_var: [T(STRUCTURE_VAR)] -> S_struct_def      --- make_T_struct(S_struct_def)
+
+F:      as a Field header.  
+        FOUR KINDS:     1.F_basic:      [F]->null(T)                            --- make_F_basic(id)  
+                        2.F_array:      [F]->[T(ARRAY)]->......->null(T)        --- make_F_array(F_basic or F_arr) 
+                        3.F_struct_def: [F]->[T(STRUCTURE_DEF)]->null(SL)       --- make_F_struct(id)
+                        4.F_func:       [F]->[T(FUNC)]--+-->null(T)             --- make_F_func(id)
+                                                        `-->null(SL)
+
+S:      Can be added to symbol table as a symbol field (refer to the symbol definition:sym-table.h), linked with F and T.
+        FOUR KINDS:     1.S_single:     F_basic->(T_basic or T_struct_var)      --- make_S_single(F_basic, T)
+                        2.S_array:      F_array->(T_basic or T_struct_var)      --- make_S_array(F_array, T)
+                        3.S_struct_def: F_struct_def-> SL                       --- make_S_struct(F_struct_def, SL)
+                        4.S_func:       F_func--+-->(T_basic or T_struct_var)   --- make_S_func(T, F_func, SL)
+                                                `--> SL
+
+SL:     A S list, linked with [F].next, commonly used in param list or struct elems. 
+        TWO KINDS:      1.S                                                     --- make_SL(S, null) 
+                        2.SL+SL         SL
+                                        ↓
+                                        SL                                      --- make_SL(SL, SL)
+
+E:      Exp type. see the struct Exptype.
+
+/* SDT */
+
+>> High-level Definitions
+
+Program    -> ExtDefList
+ExtDefList -> ExtDef ExtDefList
+            | null
+
+(S):t (SL):l
+ExtDef ->  Specifier            {ExtDecList.b = Spec.t}
+           ExtDecList SEMI      {ExtDef.l = ExtDecList.t;} 
+                                {for S in ExtDef.l do:
+                                        ADD_SYM(S)} 
+        |  Specifier SEMI       
+        |  Specifier            {FunDec.b = Spec.t}
+           FunDec               {ExtDef.t = FunDec.t;ADD_SYM(ExtDef.t)}
+                                {enter scope}
+                                {add symbol for the param in varlist}
+                                {CompSt.b = Spec.t}
+           CompSt               
+                                {exit scope}
+
+(T):b (SL):t
+ExtDecList -> VarDec            {ExtDecList.t = make_S_single(ExtDecList.b, VarDec.t)
+                                             or make_S_array(ExtDecList.b, VarDec.t)}
+            | VarDec            {ExtDecList.t = make_S_single(ExtDecList.b, VarDec.t)
+                                             or make_S_array(ExtDecList.b, VarDec.t)}
+              COMMA ExtDecList  {ExtDecList.t = make_SL(ExtDecList.t, ExtDecList1.t)}
+
+
+>> Specifiers
+
+(T):t
+Specifier -> TYPE               {Spec.t = make_T_basic(TYPE);}
+           | StructSpecifier    {Spec.t = make_T_struct(StructSpecifier.t)}
+
+(S):t
+Warning: OptTag may be null.
+StructSpecifier -> STRUCT OptTag {enter struct scope;}
+                   LC DefList RC {exit struct scope;}
+                                 {StructSpecifier.t = make_S_struct(OptTag.t, DefList.t)}
+                                 {ADD_SYM(StructSpecifier.t);}
+                 | STRUCT Tag    {StructSpecifier.t = search_symbol(Tag.t)}
+
+(F):t
+OptTag -> ID    {OptTag.t = make_F_struct(ID)}
+        | null  {OptTag.t = make_F_struct(_annoy_);}
+(ptr):t
+Tag -> ID       {Tag.t = ptr(ID);}
+
+
+>> Declarators
+
+(F):t
+VarDec -> ID                        {VarDec.t = make_F_basic(ID)         }
+        | VarDec LB INT RB          {VarDec.t = make_F_array(V1.t, INT)}
+
+(T):b (S):t
+FunDec -> ID LP VarList RP           { FunDec.t = make_S_func(FunDec.b, make_F_func(ID), VarList.t)  }
+        | ID LP RP                   { FunDec.t = make_S_func(FunDec.b, make_F(ID), null)}
+
+(SL):t
+VarList -> ParamDec COMMA VarList    {VarList.t = make_SL(ParamDec.t, VarList1.t)}
+        | ParamDec                   {VarList.t = ParamDec.t}
+
+(S):t
+ParamDec -> Specifier VarDec         {ParamDec.t = make_S_single(Spec.t, VarDec.t)
+                                                or make_S_array(Spec.t, VarDec.t)}
+                                     
+
+
+>> Statements
+
+(T):b 
+CompSt -> LC          
+          DefList     {StmtList.b = CompSt.b}
+          StmtList     
+          RC          
+
+(T):b
+StmtList -> Stmt StmtList   {Stmt.b = StmtList.b; StmtList1.b = StmtList.b}
+          | null
+
+(T):b
+Stmt -> Exp SEMI
+      |                 {enter scope; CompSt.b = Stmt.b}
+         CompSt                    
+                        {exit scope;} 
+      | RETURN Exp SEMI {check the Exp.t with Stmt.b}
+      | IF LP Exp RP Stmt
+      | IF LP Exp RP Stmt ELSE Stmt
+      | WHILE LP Exp RP Stmt
+
+
+>> Local Definitions
+
+(SL):t
+DefList -> Def DefList  {make_SL(Def.t, DefList.t)}
+        | null
+
+(SL):t
+Def -> Specifier        {DecList.b = Spec.t} 
+       DecList SEMI     {Def.t = DecList.t}
+
+(T):b (SL):t
+DecList ->           {Dec.b = DecList.b} 
+           Dec       {DecList.t = Dec.t}
+         |           {Dec.b = DecList.b} 
+           Dec COMMA {DecList1.b = DecList.b} 
+           DecList   {DecList.t = make_SL(Dec.t, DecList1.t)}
+
+(T):b (S):t
+Dec -> VarDec                   {Dec.t = make_S(VarDec.t, Dec.b)}
+                                {ADD_SYM(Dec.t, null)} 
+    | VarDec ASSIGNOP Exp       {Dec.t = make_S(VarDec.t, Dec.b);check the Exp.t with Dec.b} 
+                                {ADD_SYM(Dec.t, Exp)}
+   
+
+>>  Expressions
+
+(E):t
+Exp -> Exp ASSIGNOP Exp
+     | Exp AND Exp
+     | Exp OR Exp
+     | Exp RELOP Exp
+     | Exp PLUS Exp
+     | Exp MINUS Exp
+     | Exp STAR Exp
+     | Exp DIV Exp
+     | LP Exp RP
+     | MINUS Exp
+     | NOT Exp
+     | ID LP Args RP   // Func Call      {Args.b = search_symbol(ID).para_list}
+     | ID LP RP        // Func Call
+     | Exp LB Exp RB   // ARRAY ACCESS
+     | Exp DOT ID      // STRUCT ACCESS
+     | ID              
+     | INT
+     | FLOAT
+
+(SL):b
+Args -> Exp COMMA Args {check the Exp.t with Args.b}
+      | Exp              {check the Exp.t with Args.b}

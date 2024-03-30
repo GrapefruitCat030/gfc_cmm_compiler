@@ -1,0 +1,62 @@
+注意：代码实现因各人而已，例如此项目代码实现中tran_Args并没有进行arg_list的构造，而是遍历进行单个添加。
+
+| case Stmt of                  | translate_ Stmt (Stmt, sym_ table)                           |
+| ----------------------------- | ------------------------------------------------------------ |
+| Exp SEMI                      | return translate_ Exp (Exp, sym_ table, NULL)                |
+| CompSt                        | return translate_ CompSt (CompSt, sym_ table)                |
+| RETURN Exp SEMI               | t1 = new_ temp () <br />code1 = translate_ Exp(Exp, sym_ table, t1) <br />code2 = [RETURN t1] <br />return code1十+ code2 |
+| If LP Exp RP Stmt1            | labell = new_ label() <br />label2 =,new_ label () <br />code1 = translate_ Cond (Exp,label1, label2, sym_ table) <br />code2 = translate_ Stmt (Stmt1, sym_ table) <br />return code1 + [LABEL label1] + code2 + [LABEL label2 ] |
+| If LP Exp RP Stmt1 ELSE Stmt2 | label1 = new_ label() <br />label2 = new_ label() <br />label3 =,new_ label () <br />code1 = translate_ Cond (Exp,label1, 1abe12, sym_table) <br />code2 = translate_ Stmt (Stmt1, sym_ table) <br />code3 = translate_ Stmt (Stmt2, sym_ table) <br />return code1 + [LABEL label1] + code2 + [GOTO label3] + [ LABEL label2] + code3 + [LABEL label3] |
+| WHILE LP Exp RP stmt1         | label1 = new_ label () <br />label2 = new_ label() <br />label3 = new_ label () <br />code1 = translate_ Cond (Exp,label2, label3, sym_table) <br />code2 = translate_ Stmt (Stmt1, sym_ table) <br />return [LABEL label1] + code1 + [LABEL label2] +, code2 + [GOTO label1] + [LABEL label3] |
+
+
+
+| case Exp of                                                  | translate_ Exp (Exp, sym_ table, place)                      |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| INT                                                          | value = get_ value (INT) <br />return [place := #value]      |
+| ID                                                           | variable = lookup (sym_ table, ID) <br />return [place := variable. name] |
+| Exp1 ASSIGNOP Exp2<br /> (Exp1-- > ID)                       | variable = lookup(sym_ table, Exp1.ID) <br />t1 = new_ temp () <br />code1 = translate_ Exp (Exp2, sym_ table, t1) <br />code2 = [variable.name := t1] + [place := variable. name] <br />return code1 + code2 |
+| Exp1 RELOP Exp2<br />Exp1 AND Exp2<br />Exp1 OR Exp2<br />NOT Exp1 | label1 = new_ label() <br />label2 = new_ label() <br />code0 = [place := #0] <br />code1 = translate_ Cond(Exp, labell,label2, sym_ table) <br />code2 = [LABEL label1] + [place := #1] <br />return code0 + code1 + code2 + [LABEL label2 ] |
+| Exp1 PLUS ExP2                                               | t1 =new_ temp() <br />t2 =new_ temp() <br />code1 = translate_ Exp (Exp1, sym_ table, t1) <br />code2 = translate_ Exp (ExP2, sym_ table, t2) <br />code3 = [place := t1 + t2] <br />return code1 + code2 + code3 |
+| Exp1 MINUS ExP2                                              | t1 =new_ temp() <br />t2 =new_ temp() <br />code1 = translate_ Exp (Exp1, sym_ table, t1) <br />code2 = translate_ Exp (ExP2, sym_ table, t2) <br />code3 = [place := t1 - t2] <br />return code1 + code2 + code3 |
+| Exp1 STAR ExP2                                               | t1 =new_ temp() <br />t2 =new_ temp() <br />code1 = translate_ Exp (Exp1, sym_ table, t1) <br />code2 = translate_ Exp (ExP2, sym_ table, t2) <br />code3 = [place := t1 * t2] <br />return code1 + code2 + code3 |
+| Exp1 DIV ExP2                                                | t1 =new_ temp() <br />t2 =new_ temp() <br />code1 = translate_ Exp (Exp1, sym_ table, t1) <br />code2 = translate_ Exp (ExP2, sym_ table, t2) <br />code3 = [place := t1 / t2] <br />return code1 + code2 + code3 |
+| MINUS Exp1                                                   | t1 = new_ temp () <br />code1 = translate_ Exp (Exp1, sym_ table, t1) <br />code2 = [place := #0 - t1] <br />return code1 + code2 |
+| ID LP RP                                                     | function = lookup (sym_ table, ID) <br />if (funct ion.name =="read") return [READ place] <br />return [place := CALL function.name] |
+| ID LP Args RP                                                | function = lookup (sym_ table, ID) <br />arg_ list = NULL <br />code1 = translate_ Args (Args, sym_ table, arg_list) <br />if (function.name == "write") return code1 + [WRITE arg_list[1] ] + [place := #0] <br />for i=1 to length (arg_ list) code2 = code2 + [ARG arg_ list[i]] <br />return code1 + code2 + [place := CALL function.name] |
+
+
+
+| case Exp of     | translate_ Cond(Exp, label_ true, label_ false, sym_ table)= |
+| --------------- | ------------------------------------------------------------ |
+| Exp1 RELOP Exp2 | t1 =new_ temp() <br />t2 =new_ temp() <br />code1 = translate_ Exp(Exp1r sym_ table, t1) <br />code2 = translate_ Exp(Exp2, sym_ table, t2) <br />op= get_ relop(RELOP) <br />code3 = [IF t1 op t2 GOTO label_ true] <br />return code1 + code2 + code3 + [GOTO label_ false] |
+| NOT Exp1        | return translate_ Cond(Exp1, label_ false, label_true, sym_tabie) |
+| Exp1 AND ExP2   | label1 = new_ label() <br />code1 = translate_ Cond(Exp1, label1, label_ false, sym_ table) <br />code2 = translate_ Cond(Exp2, label_ true, label_ false, sym_ table) <br />return code1 + [LABEL label1] + code2 |
+| Exp1 OR Expz    | label1 = new_ label () <br />code1 = translate_Cond (Exp1, label_ true, labell, sym_ table) <br />code2 = translate_ Cond(Exp2, label_ true, label_ false, sym_ table) <br />return code1 + [LABEL label1] + code2 |
+| (Other Cases)   | t1 =new_temp() <br />code1 = translate_ Exp (Exp, sym_ table, t1) <br />code2 = [IF t1 != #0 GOTO label_ true] <br />return code1 + code2 + [GOTO label_ false] |
+
+
+
+| case Args of    | translate_ Args(Args, sym_ table, arg_ 1ist)                 |
+| --------------- | ------------------------------------------------------------ |
+| Exp             | t1 =new_ temp () <br />code1= translate_ Exp(Exp, sym_ table, t1) <br />arg_ list =t1 + arg_ list <br />return code1 |
+| Exp COMMA Args1 | t1 =new_ temp () <br />code1 = translate_ Exp(Exp, sym_ table, t1) <br />arg_ list= t1 + arg_list <br />code2 = translat. Args(Args1, sym_ table, arg_list) <br />return codel + code2 |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

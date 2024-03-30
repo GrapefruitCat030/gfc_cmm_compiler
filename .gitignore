@@ -1,0 +1,13 @@
+syntax.tab.*
+lex.yy.c
+*.d
+*.o
+.sw*
+*.pdf
+
+parser
+out1.ir
+a.out
+*.output
+unit-test/
+.vscode/
