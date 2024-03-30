@@ -3,7 +3,6 @@ lex.yy.c
 *.d
 *.o
 .sw*
-*.pdf
 
 parser
 out1.ir
